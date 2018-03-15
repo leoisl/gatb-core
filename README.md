@@ -1,8 +1,6 @@
 # FORK FROM GATB - The Genome Analysis Toolbox with de-Bruijn graph
 
 ## Change 1 - High precision abundance
-Uses  (this can be good only for some specific applications, since the memory overhead can increase a lot).
-
 To use high precision abundance instead of abundance discretization, pass `-DSKIP_DISCRETIZATION=1` to `cmake`.
 To define the type of the abundance variable, pass `-DABUNDANCE_TYPE=<new_type>` to `cmake`.
 
