@@ -135,7 +135,7 @@ struct Node_t
      * \param[in] strand : strand telling how to interpret the kmer value. Default value is forward by convention.
      * \param[in] abundance : abundance of the kmer. Default value is 0 if not set.
      */
-    Node_t (const Node_t::Value& kmer, kmer::Strand strand=kmer::STRAND_FORWARD, u_int16_t abundance=0, u_int64_t mphfIndex = 0)
+    Node_t (const Node_t::Value& kmer, kmer::Strand strand=kmer::STRAND_FORWARD, ABUNDANCE_TYPE abundance=0, u_int64_t mphfIndex = 0)
         : kmer(kmer), strand(strand), abundance(abundance), mphfIndex(mphfIndex) , iterationRank(0) {}
 
     /** kmer value for the node (min of the forward and revcomp value of the bi-directed DB graph). */
@@ -145,7 +145,7 @@ struct Node_t
     kmer::Strand strand;
 
     /** Abundance of the kmer in the initial set of reads. */
-    u_int16_t    abundance;
+    ABUNDANCE_TYPE    abundance;
 
     u_int64_t mphfIndex;
     u_int64_t iterationRank; // used in Simplifications.cpp (see note on tips)
@@ -897,7 +897,7 @@ public:
     /** Return the abundance of a node by querying the perfect hash function 
      * \param[in] node : the node
      * \return the abundance */
-    int queryAbundance (Node& node) const;
+    ABUNDANCE_TYPE queryAbundance (Node& node) const;
 
     /** Return the state of a node by querying the perfect hash function. A node state is either normal, marked, or deleted.
      * \param[in] node : the node or a node index (unsigned long) from the MPHF

@@ -1,3 +1,20 @@
+# FORK FROM GATB - The Genome Analysis Toolbox with de-Bruijn graph
+
+## Change 1 - High precision abundance
+Uses  (this can be good only for some specific applications, since the memory overhead can increase a lot).
+
+To use high precision abundance instead of abundance discretization, pass `-DSKIP_DISCRETIZATION=1` to `cmake`.
+To define the type of the abundance variable, pass `-DABUNDANCE_TYPE=<new_type>` to `cmake`.
+
+For example, to use high precision abundance with 32-bit unsigned ints, and with a test:
+```
+cmake -DABUNDANCE_TYPE=u_int32_t -DSKIP_DISCRETIZATION=1 ..
+make -j 8
+CPPUNIT_VERBOSE=1 bin/gatb-core-cppunit TestDebruijn
+```
+
+WARNING: high precision abundance with a large variable type can increase a lot the memory overhead of the graph. If you do not absolutely need high precision abundance, use GATB's abundance discretization.
+
 # GATB - The Genome Analysis Toolbox with de-Bruijn graph
 
 &nbsp;&nbsp;&nbsp;[![](https://img.shields.io/badge/release-1.3.0-orange.svg?style=plastic)](https://github.com/GATB/gatb-core/releases)&nbsp;-&nbsp;[![](https://img.shields.io/badge/build--Linux-passing-green.svg?style=plastic)]()&nbsp;&nbsp;[![](https://img.shields.io/badge/build--OSX-passing-green.svg?style=plastic)]()

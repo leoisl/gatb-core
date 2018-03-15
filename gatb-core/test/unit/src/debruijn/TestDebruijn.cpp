@@ -88,6 +88,7 @@ class TestDebruijn : public Test
     CPPUNIT_TEST_SUITE_GATB (TestDebruijn);
 
         CPPUNIT_TEST_GATB (debruijn_large_abundance_query);
+        CPPUNIT_TEST_GATB (debruijn_very_large_high_precision_abundance_query);
         CPPUNIT_TEST_GATB (debruijn_test7); 
         CPPUNIT_TEST_GATB (debruijn_deletenode);
         //CPPUNIT_TEST_GATB (debruijn_checksum); // FIXME removed it because it's a damn long test
@@ -1269,17 +1270,50 @@ public:
         GraphIterator<Node> it = graph.iterator();
 
         // debugging
-        /*for (it.first(); !it.isDone(); it.next())
+        std::cout << std::endl;
+        for (it.first(); !it.isDone(); it.next())
         {
-            //std::cout << graph.toString (it.item()) << " test printing node abundance " << it.item().abundance << std::endl;
-        }*/
+            std::cout << graph.toString (it.item()) << " test printing node abundance with it.item().abundance: " << it.item().abundance << std::endl;
+        }
+        std::cout << std::endl;
+
+        // random access to nodes
+        Node node = graph.buildNode ((char*)sequence);
+        CPPUNIT_ASSERT (graph.toString(node) == sequence);
+        unsigned int abundance = graph.queryAbundance(node);
+        std::cout << graph.toString(node) << " test printing node abundance with graph.queryAbundance(node): " << abundance << ". Expected abundance:" << 1000 << std::endl;
+        CPPUNIT_ASSERT (abundance > 600 && abundance < 2000); // allow for imprecision
+    }
+
+    /** */
+    void debruijn_very_large_high_precision_abundance_query ()
+    {
+        const char* sequence = "TTGCTCACATGTTCTTTCCTGCGTTATCCCG";
+        char *bigseq= (char *)calloc(strlen(sequence)*100001,1);
+        bigseq[0]='\0';
+        for (int i = 0; i < 100000; i++)
+            strcat(bigseq,sequence);
+
+        size_t kmerSize = strlen (sequence);
+
+        // We create the graph.
+        Graph graph = Graph::create (new BankStrings (bigseq, 0),  "-kmer-size %d  -abundance-min 1  -verbose 0 -max-memory %d", kmerSize, MAX_MEMORY);
+
+        GraphIterator<Node> it = graph.iterator();
+
+        // debugging
+        std::cout << std::endl;
+        for (it.first(); !it.isDone(); it.next())
+        {
+            std::cout << graph.toString (it.item()) << " test printing node abundance " << it.item().abundance << std::endl;
+        }
 
         // random access to nodes
         Node node = graph.buildNode ((char*)sequence);
         CPPUNIT_ASSERT (graph.toString(node) == sequence);
         int abundance = graph.queryAbundance(node);
-        //std::cout << graph.toString(node) << " test printing node abundance " << abundance << " expected abundance:" << 1000 << std::endl;
-        CPPUNIT_ASSERT (abundance > 600 && abundance < 2000); // allow for imprecision
+        std::cout << graph.toString(node) << " test printing node abundance " << abundance << " expected abundance:" << 100000 << std::endl;
+        CPPUNIT_ASSERT (abundance==100000); // allow for imprecision
     }
 
 

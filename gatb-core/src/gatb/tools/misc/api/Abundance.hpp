@@ -65,7 +65,7 @@ struct ArrayData
  *  - Type : the type of items (likely kmer type)
  *  - Number : abundance associated to the item
  */
-template<typename Type, typename Number=u_int16_t> struct Abundance
+template<typename Type, typename Number=ABUNDANCE_TYPE> struct Abundance
 {
     /** Constructor.
      * \param[in] val : value of the item

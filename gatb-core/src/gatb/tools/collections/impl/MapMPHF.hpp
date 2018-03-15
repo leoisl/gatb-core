@@ -159,9 +159,10 @@ namespace gatb        {
 						/* use the hash from another MapMPHF class. hmm is this smartpointer legit?
 						 * also allocate n/x data elements
 						 */
-						void useHashFrom (MapMPHF *other, int x = 1)
+						template <class OtherKey, class OtherValue, class OtherAdaptator=AdaptatorDefault<OtherKey> >
+						void useHashFrom (MapMPHF<OtherKey, OtherValue, OtherAdaptator> *other, int x = 1)
 						{
-							hash = other->hash;
+							hash = other->getHash();
 							
 							/** We resize the vector of Value objects. */
 							data.resize ((unsigned long)((hash.size()) / (unsigned long)x) + 1LL); // that +1 and not (hash.size+x-1) / x
@@ -209,13 +210,22 @@ namespace gatb        {
 						Value& at (const Key& key)  {
 							return data[hash(key)];
 						}
-						
-                        int abundanceAt (const Key& key)  {
-							return floorf((_abundanceDiscretization [data[hash(key)]]  +  _abundanceDiscretization [data[hash(key)]+1])/2.0);
+
+						int abundanceAt(const Key &key) {
+							#ifndef SKIP_DISCRETIZATION
+							return floorf((_abundanceDiscretization[data[hash(key)]] + _abundanceDiscretization[data[hash(key)] + 1]) / 2.0);
+              #else
+							return data[hash[key]];
+							#endif
+
 						}
-	
-                        int abundanceAt (typename Hash::Code code)  {
-							return floorf((_abundanceDiscretization [data[code]]  +  _abundanceDiscretization [data[code]+1])/2.0);
+
+						int abundanceAt(typename Hash::Code code) {
+							#ifndef SKIP_DISCRETIZATION
+							return floorf((_abundanceDiscretization[data[code]] + _abundanceDiscretization[data[code] + 1]) / 2.0);
+              #else
+							return data[code];
+							#endif
 						}
 						
 						/** Get the hash code of the given key. */
@@ -231,6 +241,10 @@ namespace gatb        {
 						}
 						
 						std::vector<int>   _abundanceDiscretization;
+
+						Hash getHash() const {
+							return hash;
+						}
 
 					private:
 						

@@ -3242,26 +3242,26 @@ unsigned long getNodeIndex (const GraphData<span>& data, Node_in& node)
   it is used to support querying the right graph variant (the one that corresponds to the adequate kmer size)
 */
 template<typename Node, typename Edge, typename GraphDataVariant> 
-struct queryAbundance_visitor : public boost::static_visitor<int>    {
+struct queryAbundance_visitor : public boost::static_visitor<ABUNDANCE_TYPE>    {
 
     Node& node;
 
     queryAbundance_visitor (Node& node) : node(node){}
 
-    template<size_t span>  int operator() (const GraphData<span>& data) const
+    template<size_t span>  ABUNDANCE_TYPE operator() (const GraphData<span>& data) const
     {
         unsigned long hashIndex = getNodeIndex<span>(data, node);
-    	if(hashIndex == ULLONG_MAX) return 0; // node was not found in the mphf 
+    	  if(hashIndex == ULLONG_MAX) return 0; // node was not found in the mphf
 
-        int value = data._abundance->abundanceAt(hashIndex); // uses discretized abundance
+        ABUNDANCE_TYPE value = data._abundance->abundanceAt(hashIndex); // uses discretized abundance
 
         return value;
     }
 };
 
 /** */
-template<typename Node, typename Edge, typename GraphDataVariant> 
-int GraphTemplate<Node, Edge, GraphDataVariant>::queryAbundance (Node& node) const
+template<typename Node, typename Edge, typename GraphDataVariant>
+ABUNDANCE_TYPE GraphTemplate<Node, Edge, GraphDataVariant>::queryAbundance (Node& node) const
 {
     return boost::apply_visitor (queryAbundance_visitor<Node, Edge, GraphDataVariant>(node),  *(GraphDataVariant*)_variant);
 }

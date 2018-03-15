@@ -74,7 +74,7 @@ namespace impl      {
  *
  * Some statistics about the MPHF building are gathered and put into the Properties 'info'.
  */
-template<size_t span=KMER_DEFAULT_SPAN, typename Abundance_t=u_int8_t, typename NodeState_t=u_int8_t>
+template<size_t span=KMER_DEFAULT_SPAN, typename Abundance_t=ABUNDANCE_TYPE, typename NodeState_t=u_int8_t>
 class MPHFAlgorithm : public gatb::core::tools::misc::impl::Algorithm
 {
 public:
