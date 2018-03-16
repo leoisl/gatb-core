@@ -1026,6 +1026,14 @@ public:
     GraphTemplate (const std::string& uri);
 
 public: // was private: before, but had many compilation errors during the change from Graph to GraphTemplate. took the easy route, set it to "public:", it solved everything.
+
+    #ifdef SKIP_DISCRETIZATION
+    //TODO: Leandro
+    //this is bad, should remove it after we have the solution
+    std::vector<ABUNDANCE_TYPE> highPrecisionAbundance;
+    //TODO: Leandro
+    #endif
+
     
     /** Kind of storage for the graph. */
     tools::storage::impl::StorageMode_e _storageMode;

@@ -3263,7 +3263,24 @@ struct queryAbundance_visitor : public boost::static_visitor<ABUNDANCE_TYPE>    
 template<typename Node, typename Edge, typename GraphDataVariant>
 ABUNDANCE_TYPE GraphTemplate<Node, Edge, GraphDataVariant>::queryAbundance (Node& node) const
 {
+    #ifdef SKIP_DISCRETIZATION
+    //TODO: Leandro
+    //this is bad, should remove it after we have the solution
+    if (highPrecisionAbundance.size()==0) {
+        //highPrecisionAbundance was not init yet, populate it
+        //since this method is const and I do not want to create a method like preComputeAbundance() in order to keep the exact same interface as before, I do this very ugly thing
+        //But this solution is probably temporary, so no one cares if it is bad (will eventually fill in data correctly)...
+        GraphTemplate<Node, Edge, GraphDataVariant>* nonConstThis = const_cast<GraphTemplate<Node, Edge, GraphDataVariant>*>( this );
+        nonConstThis->highPrecisionAbundance.resize(this->getInfo()["kmers_nb_solid"]->getInt());
+        auto it = this->iterator();
+        for (it.first(); !it.isDone(); it.next())
+            nonConstThis->highPrecisionAbundance[this->nodeMPHFIndex(it.item())]=it.item().abundance;
+    }
+    return this->highPrecisionAbundance[this->nodeMPHFIndex(node)];
+    //TODO: Leandro
+    #else
     return boost::apply_visitor (queryAbundance_visitor<Node, Edge, GraphDataVariant>(node),  *(GraphDataVariant*)_variant);
+    #endif
 }
 
 /* 
