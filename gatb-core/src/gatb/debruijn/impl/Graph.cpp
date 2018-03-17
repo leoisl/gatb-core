@@ -746,7 +746,7 @@ GraphTemplate<Node, Edge, GraphDataVariant_t>::GraphTemplate (size_t kmerSize)
       _variant(new GraphDataVariant_t()), _kmerSize(kmerSize), _info("graph"),
       _state(GraphTemplate<Node, Edge, GraphDataVariant>::STATE_INIT_DONE),
       _bloomKind(BLOOM_DEFAULT), _debloomKind(DEBLOOM_DEFAULT), _debloomImpl(DEBLOOM_IMPL_DEFAULT),
-      _branchingKind(BRANCHING_STORED)
+      _branchingKind(BRANCHING_STORED), _highPrecisionAbundanceSynchronizer(System::thread().newSynchronizer())
 {
     /** We configure the data variant according to the provided kmer size. */
     setVariant (_variant, _kmerSize);
@@ -767,7 +767,7 @@ template<typename Node, typename Edge, typename GraphDataVariant_t>
 GraphTemplate<Node, Edge, GraphDataVariant_t>::GraphTemplate (const std::string& uri)
     : _storageMode(PRODUCT_MODE_DEFAULT), _storage(0),
       _variant(new GraphDataVariant_t()), _kmerSize(0), _info("graph"), 
-      _name(System::file().getBaseName(uri))
+      _name(System::file().getBaseName(uri)), _highPrecisionAbundanceSynchronizer(System::thread().newSynchronizer())
 
 {
     /** We create a storage instance. */
@@ -802,7 +802,7 @@ template<typename Node, typename Edge, typename GraphDataVariant>
 GraphTemplate<Node, Edge, GraphDataVariant>::GraphTemplate (bank::IBank* bank, tools::misc::IProperties* params)
     : _storageMode(PRODUCT_MODE_DEFAULT), _storage(0),
       _variant(new GraphDataVariant()), _kmerSize(0), _info("graph"),
-      _state(GraphTemplate<Node, Edge, GraphDataVariant>::STATE_INIT_DONE)
+      _state(GraphTemplate<Node, Edge, GraphDataVariant>::STATE_INIT_DONE), _highPrecisionAbundanceSynchronizer(System::thread().newSynchronizer())
 {
     /** We get the kmer size from the user parameters. */
     _kmerSize = params->getInt (STR_KMER_SIZE);
@@ -836,7 +836,7 @@ template<typename Node, typename Edge, typename GraphDataVariant>
 GraphTemplate<Node, Edge, GraphDataVariant>::GraphTemplate (tools::misc::IProperties* params)
     : _storageMode(PRODUCT_MODE_DEFAULT), _storage(0),
       _variant(new GraphDataVariant()), _kmerSize(0), _info("graph"),
-      _state(GraphTemplate<Node, Edge, GraphDataVariant>::STATE_INIT_DONE)
+      _state(GraphTemplate<Node, Edge, GraphDataVariant>::STATE_INIT_DONE), _highPrecisionAbundanceSynchronizer(System::thread().newSynchronizer())
 {
     /** We get the kmer size from the user parameters. */
     _kmerSize = params->getInt (STR_KMER_SIZE);
@@ -923,7 +923,8 @@ GraphTemplate<Node, Edge, GraphDataVariant>::GraphTemplate ()
       _variant(new GraphDataVariant()), _kmerSize(0), _info("graph"),
       _state(GraphTemplate<Node, Edge, GraphDataVariant>::STATE_INIT_DONE),
       _bloomKind(BLOOM_DEFAULT),
-      _debloomKind(DEBLOOM_DEFAULT), _debloomImpl(DEBLOOM_IMPL_DEFAULT), _branchingKind(BRANCHING_STORED)
+      _debloomKind(DEBLOOM_DEFAULT), _debloomImpl(DEBLOOM_IMPL_DEFAULT), _branchingKind(BRANCHING_STORED),
+      _highPrecisionAbundanceSynchronizer(System::thread().newSynchronizer())
 {
     //std::cout << "empty graphtemplate constructor" << std::endl;
 }
@@ -939,7 +940,8 @@ GraphTemplate<Node, Edge, GraphDataVariant>::GraphTemplate ()
 template<typename Node, typename Edge, typename GraphDataVariant>
 GraphTemplate<Node, Edge, GraphDataVariant>::GraphTemplate (const GraphTemplate<Node, Edge, GraphDataVariant>& graph)
     : _storageMode(graph._storageMode), _storage(0),
-      _variant(new GraphDataVariant()), _kmerSize(graph._kmerSize), _info("graph"), _name(graph._name), _state(graph._state)
+      _variant(new GraphDataVariant()), _kmerSize(graph._kmerSize), _info("graph"), _name(graph._name), _state(graph._state),
+      _highPrecisionAbundanceSynchronizer(System::thread().newSynchronizer())
 {
     setStorage (graph._storage);
 
@@ -3270,11 +3272,23 @@ ABUNDANCE_TYPE GraphTemplate<Node, Edge, GraphDataVariant>::queryAbundance (Node
         //highPrecisionAbundance was not init yet, populate it
         //since this method is const and I do not want to create a method like preComputeAbundance() in order to keep the exact same interface as before, I do this very ugly thing
         //But this solution is probably temporary, so no one cares if it is bad (will eventually fill in data correctly)...
-        GraphTemplate<Node, Edge, GraphDataVariant>* nonConstThis = const_cast<GraphTemplate<Node, Edge, GraphDataVariant>*>( this );
-        nonConstThis->highPrecisionAbundance.resize(this->getInfo()["kmers_nb_solid"]->getInt());
-        auto it = this->iterator();
-        for (it.first(); !it.isDone(); it.next())
-            nonConstThis->highPrecisionAbundance[this->nodeMPHFIndex(it.item())]=it.item().abundance;
+
+        //We have to control for multi-threaded access of queryAbundance though...
+        //let's get the lock
+        _highPrecisionAbundanceSynchronizer->lock();
+            //the outer if has the same condition as this one just to go faster in the subsequent calls to queryAbundance (they won't need to get and release the lock)
+            if (highPrecisionAbundance.size()==0) { //checks if another thread already did the job, so we don't need to
+
+                //init highPrecisionAbundance
+                GraphTemplate<Node, Edge, GraphDataVariant>* nonConstThis = const_cast<GraphTemplate<Node, Edge, GraphDataVariant>*>( this );
+                nonConstThis->highPrecisionAbundance.resize(this->getInfo()["kmers_nb_solid"]->getInt());
+                auto it = this->iterator();
+                for (it.first(); !it.isDone(); it.next())
+                    nonConstThis->highPrecisionAbundance[this->nodeMPHFIndex(it.item())]=it.item().abundance;
+            }
+
+        //release the lock
+        _highPrecisionAbundanceSynchronizer->unlock();
     }
     return this->highPrecisionAbundance[this->nodeMPHFIndex(node)];
     //TODO: Leandro

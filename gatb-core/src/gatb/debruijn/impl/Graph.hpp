@@ -1030,6 +1030,7 @@ public: // was private: before, but had many compilation errors during the chang
     #ifdef SKIP_DISCRETIZATION
     //TODO: Leandro
     //this is bad, should remove it after we have the solution
+    system::ISynchronizer* _highPrecisionAbundanceSynchronizer; //controls the concurrent init of highPrecisionAbundance
     std::vector<ABUNDANCE_TYPE> highPrecisionAbundance;
     //TODO: Leandro
     #endif
