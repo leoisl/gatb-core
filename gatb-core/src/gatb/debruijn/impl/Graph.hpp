@@ -1025,6 +1025,89 @@ public:
     /** Constructor. Use for reading from filesystem. */
     GraphTemplate (const std::string& uri);
 
+
+
+
+
+
+
+
+
+
+
+    /**********************************************************************/
+    /**********************************************************************/
+    /**********************************************************************/
+    /*      METHODS THAT I ADDED TO DEAL WITH RNA-SEQ DATA                */
+    /**********************************************************************/
+    /**********************************************************************/
+    /**********************************************************************/
+    //PS: some stuff here must be really optimized or recoded...
+
+    /** Build a graph from user options as a pointer
+     * Added function
+     * \param[in] fmt: printf-like format
+     * \return the created graph.
+     */
+    static GraphTemplate*  createAsPointer (const char* fmt, ...);
+    static GraphTemplate*  loadAsPointer (const std::string& uri)  {  return  new GraphTemplate (uri);  }
+
+    /* Given an edge, get the equivalent outgoing edge. This is pretty different from the reverseEdge() method above, I do not really know why...
+     * param[in] edge: the edge
+     * \return the equivalent outgoing edge. */
+    Edge getTheEquivalentOutgoingEdge (Edge edge) const;
+
+    /* relativeErrorRemoval helper - remove an edge from the adjacency list represented by errorRemovedAdjacencyList
+     * param[in]: originalEdge: the edge to be removed
+     * param[in]: errorRemovedAdjacencyList: the adjancency list to be modified in order to reflect the removal of the edge
+     * param[in]: synchro: the synchronizer for multithreading
+     * param[in]: file: if not null, write the edges removed to this file
+     * */
+    void removeEdge(Edge originalEdge, std::vector<unsigned char> &errorRemovedAdjacencyList,
+                    const std::shared_ptr<system::ISynchronizer> &synchro, std::ofstream *file);
+
+
+    /* Remove edges that are described in a file in the format:
+     * [TAAATTTTTTACTCTCTCTACAAGGTTTTTT --T--> AAATTTTTTACTCTCTCTACAAGGTTTTTTT]
+     * ...
+     * param[in] filenameWithTheRemovedEdges: path to the file with the edges removed
+     * */
+    void removeEdgesFromFile (const std::string &filenameWithTheRemovedEdges, unsigned int nbCores, std::ofstream *DEBUGFileWithEdgesTrulyRemoved = NULL);
+
+
+    /* Perform relative error removal as described in KisSplice - remove edges that are relatively low covered
+     * param[in]: relativeCutoff: the cutoff
+     * */
+    void relativeErrorRemoval (double relativeCutoff, const std::string &prefixSR, unsigned int nbCores);
+
+
+    /**********************************************************************/
+    /**********************************************************************/
+    /**********************************************************************/
+    /*      METHODS THAT I ADDED TO DEAL WITH RNA-SEQ DATA                */
+    /**********************************************************************/
+    /**********************************************************************/
+    /**********************************************************************/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 public: // was private: before, but had many compilation errors during the change from Graph to GraphTemplate. took the easy route, set it to "public:", it solved everything.
 
     #ifdef SKIP_DISCRETIZATION

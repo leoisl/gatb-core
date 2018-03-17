@@ -3942,6 +3942,339 @@ GraphIterator<Node> GraphTemplate<Node, Edge, GraphDataVariant>::iteratorCachedN
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**********************************************************************/
+/**********************************************************************/
+/**********************************************************************/
+/*      METHODS THAT I ADDED TO DEAL WITH RNA-SEQ DATA                */
+/**********************************************************************/
+/**********************************************************************/
+/**********************************************************************/
+//PS: some stuff here must be really optimized or recoded...
+
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+template<typename Node, typename Edge, typename GraphDataVariant>
+GraphTemplate<Node, Edge, GraphDataVariant>*  GraphTemplate<Node, Edge, GraphDataVariant>::createAsPointer (const char* fmt, ...)
+{
+    IOptionsParser* parser = getOptionsParser (true);   LOCAL (parser);
+
+    /** We build the command line from the format and the ellipsis. */
+    std::string commandLine;
+    char* buffer = 0;
+    va_list args;
+    va_start (args, fmt);
+    vasprintf (&buffer, fmt, args);
+    va_end (args);
+    if (buffer != NULL)  {  commandLine = buffer;  FREE (buffer);  }
+
+    try
+    {
+        return new GraphTemplate (parser->parseString(commandLine)); /* will call the GraphTemplate<Node, Edge, GraphDataVariant>::GraphTemplate (tools::misc::IProperties* params) constructor */
+    }
+    catch (OptionFailure& e)
+    {
+        e.displayErrors (std::cout);
+        throw system::Exception ("Graph construction failure because of bad parameters (notify a developer)");
+    }
+}
+
+
+
+/* Given an edge, get the equivalent outgoing edge. This is pretty different from the reverseEdge() method above, I do not really know why...
+ * param[in] edge: the edge
+ * \return the equivalent outgoing edge. */
+template<typename Node, typename Edge, typename GraphDataVariant>
+Edge GraphTemplate<Node, Edge, GraphDataVariant>::getTheEquivalentOutgoingEdge(Edge inEdge) const {
+    //trivial case
+    if (inEdge.direction==DIR_OUTCOMING)
+        return inEdge;
+
+    //non-trivial case
+    Node from = reverse(inEdge.from);
+    Node to = reverse(inEdge.to);
+
+    auto neighbors = neighborsEdge(from, DIR_OUTCOMING);
+    bool assigned = false;
+    Edge toReturn;
+    neighbors.iterate([&](const Edge &neighborEdge) {
+        if (neighborEdge.to == to) {
+            toReturn = neighborEdge;
+            assigned = true;
+        }
+    });
+    if (!assigned) {
+        cerr << "Error on GraphTemplate<Node, Edge, GraphDataVariant>::getTheEquivalentOutgoing()" << endl;
+        exit(1);
+    }
+
+    return toReturn;
+}
+
+
+/* relativeErrorRemoval helper - remove an edge from the adjacency list represented by errorRemovedAdjacencyList
+ * param[in]: originalEdge: the edge to be removed
+ * param[in]: errorRemovedAdjacencyList: the adjancency list to be modified in order to reflect the removal of the edge
+ * param[in]: synchro: the synchronizer for multithreading
+ * param[in]: file: if not null, write the edges removed to this file
+ * */
+template<typename Node, typename Edge, typename GraphDataVariant>
+void GraphTemplate<Node, Edge, GraphDataVariant>::removeEdge(Edge originalEdge, std::vector<unsigned char> &errorRemovedAdjacencyList,
+                                                             const std::shared_ptr<system::ISynchronizer> &synchro, std::ofstream *file) {
+    //TODO: move this to another place so that it is more efficient
+    // nt2int is defined as static in Graph.hpp
+    nt2bit[NUCL_A] = 1;
+    nt2bit[NUCL_C] = 2;
+    nt2bit[NUCL_T] = 4;
+    nt2bit[NUCL_G] = 8;
+
+    //maps a char to a Nucleotide
+    map<char,Nucleotide> char2nt;
+    char2nt['A']=NUCL_A;
+    char2nt['C']=NUCL_C;
+    char2nt['T']=NUCL_T;
+    char2nt['G']=NUCL_G;
+
+    //get the equivalent of this edge but in outgoing form
+    Edge edge = getTheEquivalentOutgoingEdge(originalEdge);
+
+    //represents the bit to be removed
+    u_int8_t bitFrom = nt2bit[edge.from.strand == STRAND_REVCOMP ? gatb::core::kmer::reverse(edge.nt) : edge.nt]
+                       << (edge.from.strand == STRAND_REVCOMP ? 4 : 0); //all bits are 0, and the one to be removed is 1
+    bitFrom = ~bitFrom; //now, all bits are 1 and the one to be removed is 0
+
+    Node RCFrom = reverse(edge.from);
+    u_int8_t bitTo = nt2bit[ edge.to.strand == STRAND_REVCOMP ? char2nt[*toString(RCFrom).rbegin() ] : gatb::core::kmer::reverse(char2nt[*toString(RCFrom).rbegin() ])]
+                     << (edge.to.strand == STRAND_REVCOMP ? 0 : 4); //all bits are 0, and the one to be removed is 1
+    bitTo = ~bitTo; //now, all bits are 1 and the one to be removed is 0
+
+    //get the mutex so that we do not have race conditions
+    synchro->lock ();
+    //DEBUG
+    if (file)
+        (*file) << toString(edge) << endl;
+
+    errorRemovedAdjacencyList[nodeMPHFIndex(edge.from)] &= bitFrom; //removed the edge
+    errorRemovedAdjacencyList[nodeMPHFIndex(edge.to)] &= bitTo; //removed the edge
+    synchro->unlock ();
+}
+
+/* Remove edges that are described in a file in the format:
+ * [TAAATTTTTTACTCTCTCTACAAGGTTTTTT --T--> AAATTTTTTACTCTCTCTACAAGGTTTTTTT]
+ * ...
+ * param[in] filenameWithTheRemovedEdges: path to the file with the edges removed
+ * */
+template<typename Node, typename Edge, typename GraphDataVariant>
+void GraphTemplate<Node, Edge, GraphDataVariant>::removeEdgesFromFile (const string &filenameWithTheRemovedEdges, unsigned int nbCores, ofstream *DEBUGFileWithEdgesTrulyRemoved) {
+    //sanity check
+    if (!checkState(GraphTemplate<Node, Edge, GraphDataVariant>::STATE_ADJACENCY_DONE))
+        throw system::Exception ("Please call Graph::precomputeAdjacency() before calling Graph::errorRemoval()!");
+
+    //will store the adjacency list of all nodes, but with errors removed
+    //this is done so that we dont perform the removal of edges simultaneously as their traversal, since this can lead to problems
+    std::vector<unsigned char> errorRemovedAdjacencyList((size_t)(getInfo()["kmers_nb_solid"]->getInt()));
+
+    //first we create a local copy of the adjacency list
+    auto nodeIterator = iterator();
+    for (nodeIterator.first(); !nodeIterator.isDone(); nodeIterator.next()) {
+        Node& node = nodeIterator.item();
+        errorRemovedAdjacencyList[nodeMPHFIndex(node)] = boost::apply_visitor(getAdjacency_visitor<Node, Edge, GraphDataVariant>(node),  *(GraphDataVariant*)_variant);
+    }
+
+    //maps a char to a Nucleotide
+    std::map<char,Nucleotide> char2nt;
+    char2nt['A']=NUCL_A;
+    char2nt['C']=NUCL_C;
+    char2nt['T']=NUCL_T;
+    char2nt['G']=NUCL_G;
+
+    //read the removed arcs in filenameWithTheRemovedEdges to this vector of strings
+    vector<string> removedArcsAsStr;
+    {
+        std::ifstream inputFile(filenameWithTheRemovedEdges);
+        if (!inputFile) {
+            cerr << "Error opening " << filenameWithTheRemovedEdges << " @ " << __FILE__ << ":" << __LINE__ << endl;
+            std::exit(1);
+        }
+        string str;
+        while(getline(inputFile, str))
+            removedArcsAsStr.push_back(str);
+        inputFile.close();
+    }
+
+
+    //read removedArcsAsStr to this map
+    std::map<string, std::vector<Nucleotide> > removedArcs;
+    for (const auto& removedArcAsStr : removedArcsAsStr) {
+        string node = removedArcAsStr.substr(1, getKmerSize());
+        removedArcs[node].push_back(char2nt[removedArcAsStr[1+getKmerSize()+3]]);
+    }
+
+    //get iterator and dispatcher
+    ProgressGraphIteratorTemplate<Node, ProgressTimerAndSystem> itNode (iterator(), "Removing edges from set of strings");
+    Dispatcher dispatcher (nbCores);
+    std::shared_ptr<system::ISynchronizer> synchro{System::thread().newSynchronizer()};
+
+    dispatcher.iterate (itNode, [&] (Node node) {
+        for (int i=1; i<=2; i++) {
+            //remove the edges that should be removed
+            //the edges considered are ALWAYS the outgoing edges
+            string nodeAsStr = toString(node);
+
+            //check if the node has any outgoing edge that should be removed
+            if (removedArcs.count(nodeAsStr)>0) {
+                //yes - check which edge must be removed
+                successorsEdge(node).iterate([&](const Edge &edge) {
+                    if (std::find(removedArcs[nodeAsStr].begin(), removedArcs[nodeAsStr].end(), edge.nt) !=
+                        removedArcs[nodeAsStr].end()) {
+                        //this edge should be removed
+                        removeEdge(edge, errorRemovedAdjacencyList, synchro, DEBUGFileWithEdgesTrulyRemoved);
+                    }
+                });
+            }
+
+            //check for the outgoing edges of the revesed node
+            node = reverse(node);
+        }
+    }); // end of parallel node iterate
+
+    //update the adjList with the error correction
+    nodeIterator = iterator();
+    for (nodeIterator.first(); !nodeIterator.isDone(); nodeIterator.next()) {
+        Node& node = nodeIterator.item();
+        unsigned char &oldAdjList = boost::apply_visitor (getAdjacency_visitor<Node, Edge, GraphDataVariant>(node),  *(GraphDataVariant*)_variant);
+        oldAdjList = errorRemovedAdjacencyList[nodeMPHFIndex(node)];
+    }
+}
+
+/* Perform relative error removal as described in KisSplice - remove edges that are relatively low covered
+ * param[in]: relativeCutoff: the cutoff
+ * */
+template<typename Node, typename Edge, typename GraphDataVariant>
+void GraphTemplate<Node, Edge, GraphDataVariant>::relativeErrorRemoval (double relativeCutoff, const string &prefixSR, unsigned int nbCores) {
+    //TODO: deal with self-loops? For now, we say that self-loops are just normal edges
+    //sanity check
+    if (!checkState(GraphTemplate<Node, Edge, GraphDataVariant>::STATE_ADJACENCY_DONE))
+        throw system::Exception ("Please call Graph::precomputeAdjacency() before calling Graph::errorRemoval()!");
+
+    //will store the adjacency list of all nodes, but with errors removed
+    //this is done so that we dont perform the removal of edges simultaneously as their traversal, since this can lead to problems
+    std::vector<unsigned char> errorRemovedAdjacencyList((size_t)(getInfo()["kmers_nb_solid"]->getInt()));
+
+    //first we create a local copy of the adjacency list
+    auto nodeIterator = iterator();
+    for (nodeIterator.first(); !nodeIterator.isDone(); nodeIterator.next()){
+        Node& node = nodeIterator.item();
+        errorRemovedAdjacencyList[nodeMPHFIndex(node)] = boost::apply_visitor(getAdjacency_visitor<Node, Edge, GraphDataVariant>(node),  *(GraphDataVariant*)_variant);
+    }
+
+    //get iterator and dispatcher
+    ProgressGraphIteratorTemplate<Node, ProgressTimerAndSystem> itNode (iterator(), "Relative error-removal");
+    Dispatcher dispatcher (nbCores);
+    std::shared_ptr<system::ISynchronizer> synchro{System::thread().newSynchronizer()};
+
+    //open the file
+    string fileNameToWrite = prefixSR + ".removed_edges";
+    ofstream fileToWrite;
+    if (fileNameToWrite!="")
+        fileToWrite.open(fileNameToWrite);
+
+    dispatcher.iterate (itNode, [&] (Node& node) {
+        //get the sum of the out-neighbours
+        int sumOutNeighbours=0;
+        successorsEdge(node).iterate([&](Edge &successorEdge) {
+            sumOutNeighbours+=queryAbundance(successorEdge.to);
+        });
+
+        //and of the in-neighbours
+        int sumInNeighbours=0;
+        predecessorsEdge(node).iterate([&](Edge &predecessorEdge) {
+            sumInNeighbours+=queryAbundance(predecessorEdge.to);
+        });
+
+        //remove the edges less relatively covered than the relativeCutoff
+        for (Direction dir=DIR_OUTCOMING; dir<DIR_END; dir = (Direction)((int)dir + 1) ) // in both directions
+        {
+            auto neighbors = this->neighborsEdge(node, dir);
+            for (unsigned int i = 0; i < neighbors.size(); i++)
+            {
+                // TODO: add one more cut-off based on Trinity: If the outgoing edge has less than 2% support from the total incoming reads, then it is more likely a spurious transcript extension
+                int sum = (dir == DIR_OUTCOMING) ? sumOutNeighbours : sumInNeighbours;
+                double ratio = (double) queryAbundance(neighbors[i].to) / (double) sum;
+                if (ratio<relativeCutoff) {
+                    removeEdge(neighbors[i], errorRemovedAdjacencyList, synchro, &fileToWrite);
+                }
+            }
+        }
+    }); // end of parallel node iterate
+
+    //close the file
+    if (fileNameToWrite!="")
+        fileToWrite.close();
+
+    //update the adjList with the error correction
+    nodeIterator = iterator();
+    for (nodeIterator.first(); !nodeIterator.isDone(); nodeIterator.next()){
+        Node& node = nodeIterator.item();
+        unsigned char &oldAdjList = boost::apply_visitor (getAdjacency_visitor<Node, Edge, GraphDataVariant>(node),  *(GraphDataVariant*)_variant);
+        oldAdjList = errorRemovedAdjacencyList[nodeMPHFIndex(node)];
+    }
+}
+
+/**********************************************************************/
+/**********************************************************************/
+/**********************************************************************/
+/*      METHODS THAT I ADDED TO DEAL WITH RNA-SEQ DATA                */
+/**********************************************************************/
+/**********************************************************************/
+/**********************************************************************/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // instantiation
 // uses Node and Edge as defined in Graph.hpp (legacy GATB compatibility, when Graph was not templated)
 template class GraphTemplate<Node, Edge, GraphDataVariant>; 

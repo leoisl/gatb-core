@@ -13,6 +13,19 @@ CPPUNIT_VERBOSE=1 bin/gatb-core-cppunit TestDebruijn
 
 WARNING: high precision abundance with a large variable type can increase a lot the memory overhead of the graph. If you do not absolutely need high precision abundance, use GATB's abundance discretization.
 
+## Change 2 - RNA-seq error removal
+
+Added some methods to perform relative error removal in RNA-seq data in GraphTemplate class.
+The algorithm is the same as the one described in KisSplice - remove edges that are relatively low covered.
+This is usually done in several tools dealing with RNA-seq data.
+The main method is GraphTemplate::relativeErrorRemoval, which removes all edges below a relatie cutoff.
+
+## Change 3 - Some more convenient constructors
+
+Added constructors returning pointers (not sure if this is needed though) to GraphTemplate class.
+
+
+
 # GATB - The Genome Analysis Toolbox with de-Bruijn graph
 
 &nbsp;&nbsp;&nbsp;[![](https://img.shields.io/badge/release-1.3.0-orange.svg?style=plastic)](https://github.com/GATB/gatb-core/releases)&nbsp;-&nbsp;[![](https://img.shields.io/badge/build--Linux-passing-green.svg?style=plastic)]()&nbsp;&nbsp;[![](https://img.shields.io/badge/build--OSX-passing-green.svg?style=plastic)]()
