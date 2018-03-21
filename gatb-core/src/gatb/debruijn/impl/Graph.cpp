@@ -3268,7 +3268,7 @@ ABUNDANCE_TYPE GraphTemplate<Node, Edge, GraphDataVariant>::queryAbundance (Node
     #ifdef SKIP_DISCRETIZATION
     //TODO: Leandro
     //this is bad, should remove it after we have the solution
-    if (highPrecisionAbundance.size()==0) {
+    if (highPrecisionAbundanceInitialized==false) {
         //highPrecisionAbundance was not init yet, populate it
         //since this method is const and I do not want to create a method like preComputeAbundance() in order to keep the exact same interface as before, I do this very ugly thing
         //But this solution is probably temporary, so no one cares if it is bad (will eventually fill in data correctly)...
@@ -3277,14 +3277,14 @@ ABUNDANCE_TYPE GraphTemplate<Node, Edge, GraphDataVariant>::queryAbundance (Node
         //let's get the lock
         _highPrecisionAbundanceSynchronizer->lock();
             //the outer if has the same condition as this one just to go faster in the subsequent calls to queryAbundance (they won't need to get and release the lock)
-            if (highPrecisionAbundance.size()==0) { //checks if another thread already did the job, so we don't need to
-
+            if (highPrecisionAbundanceInitialized==false) { //checks if another thread already did the job, so we don't need to
                 //init highPrecisionAbundance
                 GraphTemplate<Node, Edge, GraphDataVariant>* nonConstThis = const_cast<GraphTemplate<Node, Edge, GraphDataVariant>*>( this );
                 nonConstThis->highPrecisionAbundance.resize(this->getInfo()["kmers_nb_solid"]->getInt());
                 auto it = this->iterator();
                 for (it.first(); !it.isDone(); it.next())
                     nonConstThis->highPrecisionAbundance[this->nodeMPHFIndex(it.item())]=it.item().abundance;
+                nonConstThis->highPrecisionAbundanceInitialized=true;
             }
 
         //release the lock
