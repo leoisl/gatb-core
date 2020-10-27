@@ -28,6 +28,7 @@
 
 #include <string>
 #include <sstream>
+#include <random>
 
 using namespace std;
 
@@ -45,13 +46,13 @@ namespace gatb { namespace core { namespace system { namespace impl {
 *********************************************************************/
 u_int64_t  FileSystemCommon::getAvailableSpace (const Path& path)
 {
-    struct statvfs buffer;
+  struct statvfs buffer;
 
-    statvfs (path.c_str(), &buffer);
+  statvfs (path.c_str(), &buffer);
 
-    u_int64_t available = (buffer.f_bavail * buffer.f_bsize) / 1024;
+  u_int64_t available = (buffer.f_bavail * buffer.f_bsize) / 1024;
 
-    return available;
+  return available;
 }
 
 /*********************************************************************
@@ -64,12 +65,12 @@ u_int64_t  FileSystemCommon::getAvailableSpace (const Path& path)
 *********************************************************************/
 IFileSystem::Path FileSystemCommon::getCurrentDirectory ()
 {
-    char path[1000];
-    char* buffer = getcwd (path, sizeof(path));
+  char path[1000];
+  char* buffer = getcwd (path, sizeof(path));
 
-    if (buffer == 0)  {  throw ExceptionErrno ("unable to get current directory");  }
+  if (buffer == 0)  {  throw ExceptionErrno ("unable to get current directory");  }
 
-    return path;
+  return path;
 }
 
 /*********************************************************************
@@ -82,8 +83,8 @@ IFileSystem::Path FileSystemCommon::getCurrentDirectory ()
 *********************************************************************/
 IFileSystem::Path FileSystemCommon::getDirectory (const Path& path)
 {
-     size_t pos = path.find_last_of("\\/");
-     return (std::string::npos == pos)  ? "."  : path.substr(0, pos);
+  size_t pos = path.find_last_of("\\/");
+  return (std::string::npos == pos)  ? "."  : path.substr(0, pos);
 }
 
 /*********************************************************************
@@ -96,12 +97,12 @@ IFileSystem::Path FileSystemCommon::getDirectory (const Path& path)
 *********************************************************************/
 IFileSystem::Path FileSystemCommon::getTemporaryDirectory ()
 {
-    const char* dir = 0;
+  const char* dir = 0;
 
-         if ( (dir = getenv ("TMPDIR"))  != 0)  {  return dir;    }
-    else if ( (dir = getenv ("TMP"))     != 0)  {  return dir;    }
-    else if ( (dir = getenv ("TEMPDIR")) != 0)  {  return dir;    }
-    else                                        {  return "/tmp"; }
+  if ( (dir = getenv ("TMPDIR"))  != 0)  {  return dir;    }
+  else if ( (dir = getenv ("TMP"))     != 0)  {  return dir;    }
+  else if ( (dir = getenv ("TEMPDIR")) != 0)  {  return dir;    }
+  else                                        {  return "/tmp"; }
 }
 
 /*********************************************************************
@@ -114,40 +115,40 @@ IFileSystem::Path FileSystemCommon::getTemporaryDirectory ()
 *********************************************************************/
 IFileSystem::Path FileSystemCommon::getBaseName (const Path& path, bool cutToFirstDot)
 {
-    /** We duplicate the provided path. */
-    char* reads_path = strdup (path.c_str());
+  /** We duplicate the provided path. */
+  char* reads_path = strdup (path.c_str());
 
-    /** We build the basename; it still may have a suffix. */
-    std::string reads_name (basename(reads_path)); // posix basename() may alter reads_path
+  /** We build the basename; it still may have a suffix. */
+  std::string reads_name (basename(reads_path)); // posix basename() may alter reads_path
 
-    /** We release the duplicated path. */
-    free (reads_path);
+  /** We release the duplicated path. */
+  free (reads_path);
 
-	//string prefix = System::file().getBaseName(_inputFilename);;
-	while (reads_name.find('.') != string::npos){ // make sure there is a dot in the file, else the basename is the file itself
+  //string prefix = System::file().getBaseName(_inputFilename);;
+  while (reads_name.find('.') != string::npos){ // make sure there is a dot in the file, else the basename is the file itself
 
-	    /** We look for the beginnin of the suffix. */
-		int lastindex = reads_name.find_last_of(".");
+    /** We look for the beginnin of the suffix. */
+    int lastindex = reads_name.find_last_of(".");
 
-	    /** We build the result. */
-		reads_name = reads_name.substr(0, lastindex);
+    /** We build the result. */
+    reads_name = reads_name.substr(0, lastindex);
 
-        if (cutToFirstDot == false)
-            break;
-	}
+    if (cutToFirstDot == false)
+      break;
+  }
 
-    //int lastindex = reads_name.find_last_of (".");
-    //Path result = reads_name.substr(0, lastindex);
+  //int lastindex = reads_name.find_last_of (".");
+  //Path result = reads_name.substr(0, lastindex);
 
-    /** We return the base name, without suffix. */
-    return reads_name;
+  /** We return the base name, without suffix. */
+  return reads_name;
 }
 
 
 std::string FileSystemCommon::getExtension(const Path &path)
 {
-    std::string spath = string(path.c_str());
-    return spath.substr(spath.find_last_of(".") + 1);
+  std::string spath = string(path.c_str());
+  return spath.substr(spath.find_last_of(".") + 1);
 }
 
 /*********************************************************************
@@ -160,15 +161,35 @@ std::string FileSystemCommon::getExtension(const Path &path)
 *********************************************************************/
 IFileSystem::Path FileSystemCommon::getRealPath (const Path& file)
 {
-    /** We must use a big buffer. Previously was 1024 but we got crashes on
-     * the CI server with this value... */
-    char buf [4*1024];
+  /** We must use a big buffer. Previously was 1024 but we got crashes on
+   * the CI server with this value... */
+  char buf [4*1024];
 
-    if (realpath (file.c_str(), buf) != 0)
-    {
-        return buf;
-    }
-    throw Exception ("Unable to get the real path for '%s'", file.c_str());
+  if (realpath (file.c_str(), buf) != 0)
+  {
+    return buf;
+  }
+  throw Exception ("Unable to get the real path for '%s'", file.c_str());
+}
+
+//from https://stackoverflow.com/a/24586587/5264075
+std::string random_string(std::string::size_type length)
+{
+  static auto& chrs = "0123456789"
+                      "abcdefghijklmnopqrstuvwxyz"
+                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  thread_local static std::mt19937 rg{std::random_device{}()};
+  thread_local static std::uniform_int_distribution<std::string::size_type> pick(0, sizeof(chrs) - 2);
+
+  std::string s;
+
+  s.reserve(length);
+
+  while(length--)
+    s += chrs[pick(rg)];
+
+  return s;
 }
 
 /*********************************************************************
@@ -181,10 +202,10 @@ IFileSystem::Path FileSystemCommon::getRealPath (const Path& file)
 *********************************************************************/
 string FileSystemCommon::getTemporaryFilename (const std::string& filename)
 {
-    stringstream ss;
-    ss << tmp_prefix() << "_" << System::thread().getProcess();
-    if (filename.empty()==false)  { ss << "_" << filename; }
-    return ss.str();
+  stringstream ss;
+  ss << tmp_prefix() << "_" << random_string(64);
+  if (filename.empty()==false)  { ss << "_" << filename; }
+  return ss.str();
 }
 
 /*********************************************************************
@@ -197,52 +218,52 @@ string FileSystemCommon::getTemporaryFilename (const std::string& filename)
 *********************************************************************/
 bool FileSystemCommon::doesExist (const Path& path)
 {
-    FILE* fp = fopen (path.c_str(), "rb");
+  FILE* fp = fopen (path.c_str(), "rb");
 
-   if (fp != NULL)
-   {
-       fclose (fp);
-       return true;
-   }
-   else
-   {
-       return false;
-   }
+  if (fp != NULL)
+  {
+    fclose (fp);
+    return true;
+  }
+  else
+  {
+    return false;
+  }
 }
 
 bool FileSystemCommon::doesExistDirectory (const Path& path)
 {
-   DIR* dir = opendir(path.c_str());
-   if (dir)
-   {
-           /* Directory exists. */
-           closedir(dir);
-           return true;
-   }
-   return false;
+  DIR* dir = opendir(path.c_str());
+  if (dir)
+  {
+    /* Directory exists. */
+    closedir(dir);
+    return true;
+  }
+  return false;
 }
 
 
 bool FileSystemCommon::isFolderEndingWith (const Path& path, const std::string &ending)
 {
-    if (!doesExistDirectory(path))
-        return false;
-
-    // strip '/' at end of path
-    std::string path_without_slashes = path;
-   if (path_without_slashes.length() > 0)
-   {
-       std::string::iterator it = path_without_slashes.end() - 1;
-       if (*it == '/')
-           path_without_slashes.erase(it);
-   }
-
-    // http://stackoverflow.com/questions/874134/find-if-string-ends-with-another-string-in-c
-    if (path_without_slashes.length() >= ending.length()) {
-        if (0 == path_without_slashes.compare (path_without_slashes.length() - ending.length(), ending.length(), ending))
-            return true;
-    }
+  if (!doesExistDirectory(path))
     return false;
+
+  // strip '/' at end of path
+  std::string path_without_slashes = path;
+  if (path_without_slashes.length() > 0)
+  {
+    std::string::iterator it = path_without_slashes.end() - 1;
+    if (*it == '/')
+      path_without_slashes.erase(it);
+  }
+
+  // http://stackoverflow.com/questions/874134/find-if-string-ends-with-another-string-in-c
+  if (path_without_slashes.length() >= ending.length()) {
+    if (0 == path_without_slashes.compare (path_without_slashes.length() - ending.length(), ending.length(), ending))
+      return true;
+  }
+  return false;
 }
 
 
@@ -256,11 +277,11 @@ bool FileSystemCommon::isFolderEndingWith (const Path& path, const std::string &
 *********************************************************************/
 u_int64_t  FileSystemCommon::getSize (const Path& path)
 {
-    struct stat st;
+  struct stat st;
 
-    if (stat (path.c_str(), &st) == 0) return st.st_size;
+  if (stat (path.c_str(), &st) == 0) return st.st_size;
 
-    return 0;
+  return 0;
 }
 
 /*********************************************************************
@@ -273,19 +294,19 @@ u_int64_t  FileSystemCommon::getSize (const Path& path)
 *********************************************************************/
 void FileSystemCommon::iterate (const Path& path, void (*callback) (const Path&, void* data), void* data)
 {
-    DIR* dp = opendir (path.c_str());
+  DIR* dp = opendir (path.c_str());
 
-    if (dp)
+  if (dp)
+  {
+    struct dirent* dirp = 0;
+
+    while ( (dirp = readdir(dp)) != 0)
     {
-        struct dirent* dirp = 0;
-
-        while ( (dirp = readdir(dp)) != 0)
-        {
-            callback (dirp->d_name, data);
-        }
-
-        closedir (dp);
+      callback (dirp->d_name, data);
     }
+
+    closedir (dp);
+  }
 }
 
 /*********************************************************************
@@ -298,22 +319,22 @@ void FileSystemCommon::iterate (const Path& path, void (*callback) (const Path&,
 *********************************************************************/
 std::vector<std::string> FileSystemCommon::listdir (const Path& path)
 {
-	std::vector<std::string> filenames;
-    DIR* dp = opendir (path.c_str());
+  std::vector<std::string> filenames;
+  DIR* dp = opendir (path.c_str());
 
-    if (dp)
+  if (dp)
+  {
+    struct dirent* dirp = 0;
+
+    while ( (dirp = readdir(dp)) != 0)
     {
-        struct dirent* dirp = 0;
-
-        while ( (dirp = readdir(dp)) != 0)
-        {
-        	filenames.push_back(std::string(dirp->d_name));
-        }
-
-        closedir (dp);
+      filenames.push_back(std::string(dirp->d_name));
     }
 
-    return filenames;
+    closedir (dp);
+  }
+
+  return filenames;
 }
 
 /*********************************************************************
