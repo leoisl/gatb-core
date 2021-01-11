@@ -218,7 +218,7 @@ set (gatb-core-flags ${LIBRARY_COMPILE_DEFINITIONS})
 set (gatb-core-includes ${PROJECT_BINARY_DIR}/include  ${PROJECT_BINARY_DIR}/include/${CMAKE_BUILD_TYPE} ${PROJECT_SOURCE_DIR}/src  ${PROJECT_SOURCE_DIR}/thirdparty ${ZLIB_INCLUDE_DIRS} ${gatb-core-extra-libraries-inc})
 
 # We define the libraries used for linking binary based on gatb core
-set (gatb-core-libraries   gatbcore-static  dl  pthread  z hdf5 ${gatb-core-extra-libraries})
+set (gatb-core-libraries   gatbcore-static  dl  pthread  ${ZLIB_LIBRARIES} hdf5 ${gatb-core-extra-libraries})
 
 # We define the directory where to find cmake helpers
 set (gatb-core-cmake  ${CMAKE_MODULE_PATH})
